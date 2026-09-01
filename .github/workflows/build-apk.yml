@@ -87,7 +87,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add app/keystore/release.keystore
+          git add -f app/keystore/release.keystore
           git commit -m "ci: auto-generate release signing keystore [skip ci]"
           git push
 

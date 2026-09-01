@@ -1,33 +1,23 @@
-# Gradle files
-.gradle/
-build/
-
-# Local configuration file (sdk path, etc)
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
 local.properties
 
-# Log/OS Files
-*.log
-
-# Android Studio generated files and folders
-captures/
-.externalNativeBuild/
-.cxx/
-*.apk
-output.json
-
-# IntelliJ
-*.iml
-.idea/
-misc.xml
-deploymentTargetDropDown.xml
-render.experimental.xml
-
-# Keystore files
-*.jks
-*.keystore
-
-# Google Services (e.g. APIs or Firebase)
-google-services.json
-
-# Android Profiling
-*.hprof
+# GHI CHÚ: app/keystore/release.keystore CỐ Ý KHÔNG bị ignore.
+# Workflow CI sẽ tự sinh và commit file này vào repo trong lần chạy đầu tiên
+# để các lần build sau tái sử dụng đúng 1 khóa ký (giữ khả năng cập nhật app).
+# Dòng "!" bên dưới đảm bảo file này không bị chặn bởi gitignore toàn cục
+# (global excludesfile) có sẵn trên máy chủ GitHub Actions, vốn thường có
+# sẵn quy tắc ẩn các file *.keystore/*.jks.
+!app/keystore/release.keystore
