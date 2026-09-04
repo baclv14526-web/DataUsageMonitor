@@ -1,5 +1,6 @@
 package com.datamonitor.app
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -9,115 +10,101 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 
 object NotificationHelper {
-    const val CHANNEL_ONGOING = "channel_ongoing"
-    const val CHANNEL_WARNING = "channel_warning"
-    const val CHANNEL_CRITICAL = "channel_critical"
+    const val CH_ONGOING  = "ch_ongoing"
+    const val CH_WARNING  = "ch_warning"
+    const val CH_CRITICAL = "ch_critical"
 
-    const val NOTIF_ID_ONGOING = 1001
-    const val NOTIF_ID_WARNING = 1002
-    const val NOTIF_ID_CRITICAL = 1003
+    const val ID_ONGOING  = 1001
+    const val ID_WARNING  = 1002
+    const val ID_CRITICAL = 1003
 
-    fun createChannels(context: Context) {
+    fun createChannels(ctx: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val nm = nm(ctx)
 
-        val ongoing = NotificationChannel(
-            CHANNEL_ONGOING, "Giám sát data (nền)", NotificationManager.IMPORTANCE_LOW
+        nm.createNotificationChannel(NotificationChannel(
+            CH_ONGOING, "Giám sát data (nền)", NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Thông báo nền hiển thị lưu lượng data đã dùng hôm nay"
+            description = "Hiển thị lưu lượng data đã dùng hôm nay"
             setShowBadge(false)
-        }
+        })
 
-        val warning = NotificationChannel(
-            CHANNEL_WARNING, "Cảnh báo sắp hết hạn mức", NotificationManager.IMPORTANCE_HIGH
+        nm.createNotificationChannel(NotificationChannel(
+            CH_WARNING, "Cảnh báo sắp hết hạn mức", NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Cảnh báo khi dùng gần hết hạn mức data hàng ngày"
+            description = "Cảnh báo khi dùng ≥ 80% hạn mức"
             enableVibration(true)
-        }
+        })
 
-        val critical = NotificationChannel(
-            CHANNEL_CRITICAL, "Vượt hạn mức data", NotificationManager.IMPORTANCE_HIGH
+        nm.createNotificationChannel(NotificationChannel(
+            CH_CRITICAL, "Đã vượt hạn mức data", NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Cảnh báo khẩn cấp khi vượt hạn mức data hàng ngày"
+            description = "Cảnh báo khẩn khi vượt 100% hạn mức"
             enableVibration(true)
             lockscreenVisibility = NotificationCompat.VISIBILITY_PUBLIC
-            setBypassDnd(true)
-        }
-
-        nm.createNotificationChannel(ongoing)
-        nm.createNotificationChannel(warning)
-        nm.createNotificationChannel(critical)
+        })
     }
 
-    fun buildOngoingNotification(
-        context: Context, usedBytes: Long, limitMB: Long
-    ): android.app.Notification {
-        val usedText = DataUsageUtils.formatMB(usedBytes)
-        val percent = if (limitMB > 0)
+    fun buildOngoing(ctx: Context, usedBytes: Long, limitMB: Long): Notification {
+        val pct = if (limitMB > 0)
             ((DataUsageUtils.bytesToMB(usedBytes) / limitMB) * 100).toInt() else 0
 
-        val openAppIntent = Intent(context, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, openAppIntent,
+        val pi = PendingIntent.getActivity(
+            ctx, 0, Intent(ctx, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        return NotificationCompat.Builder(context, CHANNEL_ONGOING)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("Data 3G/4G/5G hôm nay: $usedText")
-            .setContentText("Đã dùng $percent% hạn mức ${limitMB} MB/ngày")
+        return NotificationCompat.Builder(ctx, CH_ONGOING)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setContentTitle("Data di động hôm nay: ${DataUsageUtils.formatBytes(usedBytes)}")
+            .setContentText("Đã dùng $pct% / hạn mức $limitMB MB")
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setContentIntent(pendingIntent)
+            .setContentIntent(pi)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 
-    fun sendWarningNotification(context: Context, percent: Int, usedBytes: Long, limitMB: Long) {
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val openAppIntent = Intent(context, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            context, 1, openAppIntent,
+    fun sendWarning(ctx: Context, pct: Int, usedBytes: Long, limitMB: Long) {
+        val pi = PendingIntent.getActivity(
+            ctx, 1, Intent(ctx, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val notif = NotificationCompat.Builder(context, CHANNEL_WARNING)
+        nm(ctx).notify(ID_WARNING, NotificationCompat.Builder(ctx, CH_WARNING)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setContentTitle("⚠️ Sắp hết hạn mức data")
-            .setContentText("Đã dùng $percent% (${DataUsageUtils.formatMB(usedBytes)} / $limitMB MB) hôm nay")
+            .setContentTitle("⚠️ Sắp hết hạn mức data ($pct%)")
+            .setContentText("Đã dùng ${DataUsageUtils.formatBytes(usedBytes)} / $limitMB MB hôm nay")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
+            .setContentIntent(pi)
             .build()
-        nm.notify(NOTIF_ID_WARNING, notif)
+        )
     }
 
-    fun sendCriticalNotification(context: Context, usedBytes: Long, limitMB: Long) {
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        // Intent mở màn hình cảnh báo toàn màn hình (hiện cả khi khóa máy)
-        val fullScreenIntent = Intent(context, AlertActivity::class.java).apply {
+    fun sendCritical(ctx: Context, usedBytes: Long, limitMB: Long) {
+        val alertIntent = Intent(ctx, AlertActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("usedBytes", usedBytes)
             putExtra("limitMB", limitMB)
         }
-        val fullScreenPendingIntent = PendingIntent.getActivity(
-            context, 2, fullScreenIntent,
+        val fullScreenPi = PendingIntent.getActivity(
+            ctx, 2, alertIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        val notif = NotificationCompat.Builder(context, CHANNEL_CRITICAL)
+        nm(ctx).notify(ID_CRITICAL, NotificationCompat.Builder(ctx, CH_CRITICAL)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
             .setContentTitle("🚫 Đã vượt hạn mức data hôm nay!")
-            .setContentText("Đã dùng ${DataUsageUtils.formatMB(usedBytes)} / $limitMB MB")
+            .setContentText("Đã dùng ${DataUsageUtils.formatBytes(usedBytes)} / $limitMB MB")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setFullScreenIntent(fullScreenPendingIntent, true)
-            .setContentIntent(fullScreenPendingIntent)
+            .setFullScreenIntent(fullScreenPi, true)
+            .setContentIntent(fullScreenPi)
             .setAutoCancel(true)
             .build()
-        nm.notify(NOTIF_ID_CRITICAL, notif)
+        )
     }
+
+    private fun nm(ctx: Context) =
+        ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 }

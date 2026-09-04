@@ -1,4 +1,5 @@
 plugins {
+    // Không cần khai báo version vì đã khai báo trong settings.gradle.kts pluginManagement.plugins
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
@@ -9,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "com.datamonitor.app"
-        minSdk = 28
+        minSdk = 28          // Android 9 trở lên
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -17,22 +18,46 @@ android {
 
     signingConfigs {
         create("release") {
-            val ksPath = System.getenv("KEYSTORE_PATH") ?: "${project.rootDir}/keystore/release.keystore"
-            storeFile = file(ksPath)
-            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "changeit123"
-            keyAlias = System.getenv("KEY_ALIAS") ?: "datamonitor"
-            keyPassword = System.getenv("KEY_PASSWORD") ?: "changeit123"
+            // Đọc từ env (CI) hoặc local.properties (build local)
+            // Fallback path đúng: app/keystore/ (trước sai là project.rootDir/keystore/)
+            val ksPath = System.getenv("KEYSTORE_PATH")
+                ?: "${projectDir}/keystore/release.keystore"
+            val ksPassword = System.getenv("KEYSTORE_PASSWORD") ?: "changeit123"
+            val ksAlias = System.getenv("KEY_ALIAS") ?: "datamonitor"
+            val ksKeyPassword = System.getenv("KEY_PASSWORD") ?: "changeit123"
+
+            val ksFile = file(ksPath)
+            // Chỉ gán storeFile nếu file thực sự tồn tại để tránh lỗi cấu hình Gradle
+            if (ksFile.exists()) {
+                storeFile = ksFile
+                storePassword = ksPassword
+                keyAlias = ksAlias
+                keyPassword = ksKeyPassword
+            } else {
+                println("⚠️  WARNING: Keystore không tìm thấy tại $ksPath")
+                println("   Build release sẽ dùng debug signing (APK vẫn có thể cài nhưng không khuyến nghị cho production)")
+            }
         }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            // Dùng release signingConfig nếu keystore tồn tại, không thì dùng debug
+            val releaseConfig = signingConfigs.getByName("release")
+            signingConfig = if (releaseConfig.storeFile?.exists() == true) {
+                releaseConfig
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
         debug {
-            signingConfig = signingConfigs.getByName("release")
+            applicationIdSuffix = ".debug"
         }
     }
 
@@ -47,6 +72,15 @@ android {
 
     buildFeatures {
         viewBinding = true
+    }
+
+    // Đặt tên APK output rõ ràng, không có "unsigned" trong tên
+    applicationVariants.all {
+        val variant = this
+        variant.outputs.all {
+            val output = this as com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            output.outputFileName = "DataMonitor-${variant.versionName}-${variant.buildType.name}.apk"
+        }
     }
 }
 

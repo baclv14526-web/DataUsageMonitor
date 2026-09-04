@@ -1,23 +1,19 @@
+# Android/Gradle
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+.gradle/
 local.properties
+/.idea/
+.DS_Store
+/build/
+/captures/
+.externalNativeBuild/
+.cxx/
 
-# GHI CHÚ: app/keystore/release.keystore CỐ Ý KHÔNG bị ignore.
-# Workflow CI sẽ tự sinh và commit file này vào repo trong lần chạy đầu tiên
-# để các lần build sau tái sử dụng đúng 1 khóa ký (giữ khả năng cập nhật app).
-# Dòng "!" bên dưới đảm bảo file này không bị chặn bởi gitignore toàn cục
-# (global excludesfile) có sẵn trên máy chủ GitHub Actions, vốn thường có
-# sẵn quy tắc ẩn các file *.keystore/*.jks.
+# Các file build output
+app/build/
+
+# QUAN TRỌNG: KHÔNG ignore keystore trong app/keystore/
+# CI sẽ tự sinh và commit file này để giữ chữ ký nhất quán giữa các build.
+# Dòng "!" bên dưới ghi đè global gitignore của máy chủ CI (thường block *.keystore/*.jks).
+!app/keystore/
 !app/keystore/release.keystore

@@ -10,94 +10,81 @@ import android.os.Process
 import android.telephony.TelephonyManager
 import android.util.Log
 
-/**
- * Đọc lưu lượng data di động (3G/4G/5G) đã dùng bằng NetworkStatsManager.
- * Gộp chung mọi loại mạng di động (RAT) vì Android không tách rời 3G/4G/5G
- * ở tầng thống kê lưu lượng - tất cả đều thuộc TRANSPORT_MOBILE / TYPE_MOBILE.
- */
 object DataUsageUtils {
     private const val TAG = "DataUsageUtils"
 
-    /** Kiểm tra ứng dụng đã được cấp quyền "Truy cập sử dụng" (Usage Access) chưa */
-    fun hasUsageAccessPermission(context: Context): Boolean {
-        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+    fun hasUsageAccessPermission(ctx: Context): Boolean {
+        val appOps = ctx.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
         val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             appOps.unsafeCheckOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                context.packageName
-            )
+                AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), ctx.packageName)
         } else {
             @Suppress("DEPRECATION")
             appOps.checkOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                Process.myUid(),
-                context.packageName
-            )
+                AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), ctx.packageName)
         }
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
     /**
-     * Trả về tổng số byte data di động (rx+tx) đã dùng từ [startMillis] đến [endMillis].
-     * Trả về -1 nếu không thể đọc được (thiếu quyền hoặc lỗi hệ thống).
+     * Trả về tổng byte data di động (3G/4G/5G) đã dùng trong khoảng [startMs, endMs].
+     * Trả về -1 nếu thiếu quyền hoặc lỗi.
      */
-    fun getMobileDataUsageBytes(context: Context, startMillis: Long, endMillis: Long): Long {
-        if (!hasUsageAccessPermission(context)) return -1L
+    fun getMobileDataUsageBytes(ctx: Context, startMs: Long, endMs: Long): Long {
+        if (!hasUsageAccessPermission(ctx)) return -1L
+
+        val nsm = ctx.getSystemService(Context.NETWORK_STATS_SERVICE) as NetworkStatsManager
+
+        // Lấy subscriberId — cần READ_PHONE_STATE, có thể null trên một số máy
+        val subId = try {
+            val tm = ctx.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+            @Suppress("DEPRECATION")
+            tm.subscriberId ?: ""
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Không đọc được subscriberId: ${e.message}")
+            ""
+        }
 
         return try {
-            val networkStatsManager =
-                context.getSystemService(Context.NETWORK_STATS_SERVICE) as NetworkStatsManager
-
-            val telephonyManager =
-                context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
-            val subscriberId = try {
-                @Suppress("DEPRECATION")
-                telephonyManager.subscriberId ?: ""
-            } catch (e: SecurityException) {
-                ""
-            }
-
-            val bucket = networkStatsManager.querySummaryForDevice(
-                ConnectivityManager.TYPE_MOBILE,
-                subscriberId,
-                startMillis,
-                endMillis
+            // querySummaryForDevice: nhanh, trả về 1 Bucket tổng hợp
+            val bucket = nsm.querySummaryForDevice(
+                ConnectivityManager.TYPE_MOBILE, subId, startMs, endMs
             )
-            (bucket.rxBytes + bucket.txBytes)
+            bucket.rxBytes + bucket.txBytes
         } catch (e: Exception) {
-            Log.e(TAG, "Không thể đọc lưu lượng data: ${e.message}")
-            // Phương án dự phòng: cộng dồn từng bucket qua NetworkStats
-            try {
-                fallbackQuery(context, startMillis, endMillis)
-            } catch (ex: Exception) {
-                Log.e(TAG, "Fallback cũng lỗi: ${ex.message}")
-                -1L
+            Log.w(TAG, "querySummaryForDevice lỗi, thử fallback: ${e.message}")
+            // Fallback: duyệt từng Bucket (chậm hơn nhưng tương thích rộng hơn)
+            fallbackQuery(nsm, startMs, endMs)
+        }
+    }
+
+    private fun fallbackQuery(nsm: NetworkStatsManager, startMs: Long, endMs: Long): Long {
+        return try {
+            val stats: NetworkStats = nsm.querySummary(
+                ConnectivityManager.TYPE_MOBILE, "", startMs, endMs
+            )
+            var total = 0L
+            val bucket = NetworkStats.Bucket()
+            while (stats.hasNextBucket()) {
+                stats.getNextBucket(bucket)
+                total += bucket.rxBytes + bucket.txBytes
             }
+            stats.close()
+            total
+        } catch (e: Exception) {
+            Log.e(TAG, "Fallback cũng thất bại: ${e.message}")
+            -1L
         }
     }
 
-    private fun fallbackQuery(context: Context, startMillis: Long, endMillis: Long): Long {
-        val networkStatsManager =
-            context.getSystemService(Context.NETWORK_STATS_SERVICE) as NetworkStatsManager
-        val stats: NetworkStats = networkStatsManager.querySummary(
-            ConnectivityManager.TYPE_MOBILE, "", startMillis, endMillis
-        )
-        var total = 0L
-        val bucket = NetworkStats.Bucket()
-        while (stats.hasNextBucket()) {
-            stats.getNextBucket(bucket)
-            total += bucket.rxBytes + bucket.txBytes
-        }
-        stats.close()
-        return total
-    }
+    fun bytesToMB(bytes: Long): Double = bytes / 1_048_576.0
 
-    fun bytesToMB(bytes: Long): Double = bytes / 1024.0 / 1024.0
-
-    fun formatMB(bytes: Long): String {
+    fun formatBytes(bytes: Long): String {
         val mb = bytesToMB(bytes)
-        return if (mb >= 1024) String.format("%.2f GB", mb / 1024.0)
-        else String.format("%.1f MB", mb)
+        return when {
+            mb >= 1024 -> "%.2f GB".format(mb / 1024.0)
+            mb >= 1    -> "%.1f MB".format(mb)
+            else       -> "${bytes / 1024} KB"
+        }
     }
 }
