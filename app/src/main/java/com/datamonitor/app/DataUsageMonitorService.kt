@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -79,7 +80,10 @@ class DataUsageMonitorService : Service() {
     }
 
     private suspend fun runMonitorLoop() {
-        while (isActive) {
+        // currentCoroutineContext().isActive: cách đúng để kiểm tra cancel
+        // bên trong suspend fun (không phải CoroutineScope, nên 'isActive' bare
+        // không resolve được receiver phù hợp)
+        while (currentCoroutineContext().isActive) {
             try {
                 checkAndNotify()
             } catch (e: Exception) {
@@ -131,11 +135,9 @@ class DataUsageMonitorService : Service() {
         Log.d(TAG, "Service onDestroy")
         monitorJob?.cancel()
         supervisor.cancel()
-        // Xóa notification nền khi service dừng hẳn
-        try {
-            val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            nm.cancel(NotificationHelper.ID_ONGOING)
-        } catch (_: Exception) {}
+        // Xóa notification nền — gọi trực tiếp, không cần coroutine
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
+            .cancel(NotificationHelper.ID_ONGOING)
         super.onDestroy()
     }
 
