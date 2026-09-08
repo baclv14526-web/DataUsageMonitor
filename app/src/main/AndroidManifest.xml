@@ -2,61 +2,114 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Đọc thống kê lưu lượng: cấp thủ công qua Cài đặt > Truy cập sử dụng -->
-    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+    <!-- ============================================================
+         QUYỀN HỆ THỐNG
+         - PACKAGE_USAGE_STATS: đọc NetworkStatsManager (cấp thủ công)
+         - READ_PHONE_STATE: đọc subscriberId để theo đúng SIM data
+         Không khai báo INTERNET vì app không kết nối mạng ngoài.
+         ============================================================ -->
+    <uses-permission
+        android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
-
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- READ_PHONE_STATE: cần để đọc subscriberId (SIM) trên một số máy -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Foreground service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <!-- FOREGROUND_SERVICE_DATA_SYNC: bắt buộc trên Android 14+ (API 34+) khi
-         foregroundServiceType="dataSync". Trên API < 34 permission này bị ignore. -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!--
+        FOREGROUND_SERVICE_DATA_SYNC bắt buộc từ API 34 (Android 14) khi
+        foregroundServiceType="dataSync". Trên API 28-33 permission này
+        KHÔNG tồn tại nhưng PackageManager bỏ qua → không chặn cài đặt.
+        Khai báo maxSdkVersion để tránh PlayProtect cảnh báo trên thiết bị cũ.
+    -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"
+        android:minSdkVersion="34" />
+
+    <!-- Khởi động lại sau reboot -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- POST_NOTIFICATIONS: bắt buộc trên Android 13+ (API 33+) để gửi notification -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Thông báo - chỉ cần hỏi runtime trên Android 13+ (API 33+) -->
+    <uses-permission
+        android:name="android.permission.POST_NOTIFICATIONS"
+        android:minSdkVersion="33" />
+
+    <!--
+        USE_FULL_SCREEN_INTENT: hiện cảnh báo toàn màn hình khi khóa máy.
+        Từ Android 14, cần khai báo permission này và Google Play có thể
+        review. Chỉ dùng cho cảnh báo vượt hạn mức → hợp lệ.
+    -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
+    <!-- Tắt tối ưu pin để service chạy ổn định -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- WAKE_LOCK: giữ CPU đủ lâu để gửi notification khi màn hình tắt -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.DataMonitor">
+        android:theme="@style/Theme.DataMonitor"
+        android:hardwareAccelerated="true">
 
+        <!--
+            MainActivity: cửa sổ chính.
+            configChanges khai báo để tránh Activity bị destroy/recreate
+            không cần thiết khi xoay màn hình hoặc đổi font hệ thống.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop">
+            android:launchMode="singleTop"
+            android:configChanges="orientation|screenSize|fontScale|uiMode"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- AlertActivity: hiện cả khi khóa màn hình -->
+        <!--
+            AlertActivity: màn hình cảnh báo vượt hạn mức.
+            showWhenLocked + turnScreenOn: hiện được trên màn hình khóa.
+            launchMode=singleTask: tránh tạo nhiều instance chồng nhau khi
+            service gửi nhiều notification liên tiếp.
+            excludeFromRecents: không xuất hiện trong danh sách app gần đây.
+        -->
         <activity
             android:name=".AlertActivity"
             android:exported="false"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:excludeFromRecents="true"
-            android:launchMode="singleInstance"
-            android:theme="@style/Theme.DataMonitor.Alert" />
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.DataMonitor.Alert"
+            android:configChanges="orientation|screenSize|fontScale|uiMode" />
 
-        <!-- foregroundServiceType="dataSync" yêu cầu từ API 29.
-             Trên API 28 (Android 9), thuộc tính này bị ignore — không gây lỗi cài đặt. -->
+        <!--
+            DataUsageMonitorService: foreground service kiểm tra data định kỳ.
+            foregroundServiceType="dataSync":
+              - API 28 (Android 9): thuộc tính không tồn tại → bị bỏ qua
+              - API 29-33: thuộc tính hợp lệ, KHÔNG yêu cầu permission riêng
+              - API 34+ (Android 14): yêu cầu FOREGROUND_SERVICE_DATA_SYNC
+            stopWithTask=false: service tiếp tục chạy khi người dùng vuốt
+            đóng app khỏi recents (behavior mong muốn cho monitoring).
+        -->
         <service
             android:name=".DataUsageMonitorService"
             android:exported="false"
             android:foregroundServiceType="dataSync"
             android:stopWithTask="false" />
 
+        <!--
+            BootReceiver: khởi động lại service sau khi máy reboot.
+            Chỉ nhận BOOT_COMPLETED và MY_PACKAGE_REPLACED.
+            exported=true bắt buộc khi có intent-filter trên Android 12+.
+        -->
         <receiver
             android:name=".BootReceiver"
             android:exported="true">

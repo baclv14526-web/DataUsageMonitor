@@ -21,12 +21,15 @@ object NotificationHelper {
     fun createChannels(ctx: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val nm = nm(ctx)
+        // Kiểm tra đã tạo chưa để tránh gọi lặp nhiều lần
+        if (nm.getNotificationChannel(CH_ONGOING) != null) return
 
         nm.createNotificationChannel(NotificationChannel(
             CH_ONGOING, "Giám sát data (nền)", NotificationManager.IMPORTANCE_LOW
         ).apply {
             description = "Hiển thị lưu lượng data đã dùng hôm nay"
             setShowBadge(false)
+            setSound(null, null)   // Không phát âm thanh cho notification nền
         })
 
         nm.createNotificationChannel(NotificationChannel(
@@ -46,62 +49,87 @@ object NotificationHelper {
     }
 
     fun buildOngoing(ctx: Context, usedBytes: Long, limitMB: Long): Notification {
-        val pct = if (limitMB > 0)
-            ((DataUsageUtils.bytesToMB(usedBytes) / limitMB) * 100).toInt() else 0
+        val pct = if (limitMB > 0 && usedBytes >= 0)
+            ((DataUsageUtils.bytesToMB(usedBytes) / limitMB) * 100).toInt().coerceIn(0, 999)
+        else 0
+
+        val title = if (usedBytes < 0)
+            "📶 Cần cấp quyền Truy cập sử dụng"
+        else
+            "📶 Data hôm nay: ${DataUsageUtils.formatBytes(usedBytes)}"
+
+        val text = if (usedBytes < 0)
+            "Nhấn để mở app và cấp quyền"
+        else
+            "Đã dùng $pct% · Hạn mức $limitMB MB/ngày"
 
         val pi = PendingIntent.getActivity(
-            ctx, 0, Intent(ctx, MainActivity::class.java),
+            ctx, 0,
+            Intent(ctx, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+
         return NotificationCompat.Builder(ctx, CH_ONGOING)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setContentTitle("Data di động hôm nay: ${DataUsageUtils.formatBytes(usedBytes)}")
-            .setContentText("Đã dùng $pct% / hạn mức $limitMB MB")
+            .setContentTitle(title)
+            .setContentText(text)
             .setOngoing(true)
-            .setOnlyAlertOnce(true)
+            .setOnlyAlertOnce(true)  // Không rung/âm thanh khi update
             .setContentIntent(pi)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSilent(true)
             .build()
     }
 
     fun sendWarning(ctx: Context, pct: Int, usedBytes: Long, limitMB: Long) {
         val pi = PendingIntent.getActivity(
-            ctx, 1, Intent(ctx, MainActivity::class.java),
+            ctx, 1,
+            Intent(ctx, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        nm(ctx).notify(ID_WARNING, NotificationCompat.Builder(ctx, CH_WARNING)
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setContentTitle("⚠️ Sắp hết hạn mức data ($pct%)")
-            .setContentText("Đã dùng ${DataUsageUtils.formatBytes(usedBytes)} / $limitMB MB hôm nay")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setAutoCancel(true)
-            .setContentIntent(pi)
-            .build()
+        nm(ctx).notify(ID_WARNING,
+            NotificationCompat.Builder(ctx, CH_WARNING)
+                .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .setContentTitle("⚠️ Sắp hết hạn mức data ($pct%)")
+                .setContentText(
+                    "Đã dùng ${DataUsageUtils.formatBytes(usedBytes)} / $limitMB MB hôm nay")
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setAutoCancel(true)
+                .setContentIntent(pi)
+                .build()
         )
     }
 
     fun sendCritical(ctx: Context, usedBytes: Long, limitMB: Long) {
+        // Full-screen intent: hiện màn hình cảnh báo kể cả khi máy khóa
         val alertIntent = Intent(ctx, AlertActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("usedBytes", usedBytes)
             putExtra("limitMB", limitMB)
         }
+        // requestCode khác với các PI khác để tránh bị override
         val fullScreenPi = PendingIntent.getActivity(
-            ctx, 2, alertIntent,
+            ctx, 99, alertIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        nm(ctx).notify(ID_CRITICAL, NotificationCompat.Builder(ctx, CH_CRITICAL)
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setContentTitle("🚫 Đã vượt hạn mức data hôm nay!")
-            .setContentText("Đã dùng ${DataUsageUtils.formatBytes(usedBytes)} / $limitMB MB")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_ALARM)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setFullScreenIntent(fullScreenPi, true)
-            .setContentIntent(fullScreenPi)
-            .setAutoCancel(true)
-            .build()
+        nm(ctx).notify(ID_CRITICAL,
+            NotificationCompat.Builder(ctx, CH_CRITICAL)
+                .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .setContentTitle("🚫 Đã vượt hạn mức data hôm nay!")
+                .setContentText(
+                    "Đã dùng ${DataUsageUtils.formatBytes(usedBytes)} / $limitMB MB")
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .setFullScreenIntent(fullScreenPi, /* highPriority= */ true)
+                .setContentIntent(fullScreenPi)
+                .setAutoCancel(true)
+                .build()
         )
     }
 
