@@ -18,12 +18,18 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var b: ActivityMainBinding
 
-    // registerForActivityResult phải gọi trước onCreate → khai báo ở đây
     private val notifPermLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (!granted)
-            toast("Cần quyền thông báo để nhận cảnh báo data")
+        if (!granted) toast("Cần quyền thông báo để nhận cảnh báo data")
+    }
+
+    private val readPhoneStateLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) toast("✅ Đã cấp quyền đọc thông tin SIM")
+        else toast("⚠️ Chưa cấp quyền đọc SIM — đo data có thể kém chính xác")
+        refreshStatus()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +39,7 @@ class MainActivity : AppCompatActivity() {
 
         NotificationHelper.createChannels(this)
         requestNotifPermIfNeeded()
+        requestReadPhoneStateIfNeeded()
         setupUI()
     }
 
@@ -41,15 +48,14 @@ class MainActivity : AppCompatActivity() {
         b.switchMonitoring.isChecked = Prefs.isMonitoringEnabled(this)
 
         b.btnSave.setOnClickListener { saveLimit() }
-
         b.btnUsageAccess.setOnClickListener {
             startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
         }
-
         b.btnBattery.setOnClickListener { requestBatteryOptimization() }
+        b.btnDebug.setOnClickListener {
+            startActivity(Intent(this, DebugActivity::class.java))
+        }
 
-        // Dùng flag để tránh vòng lặp: switch thay đổi → listener gọi →
-        // code cập nhật switch → listener lại gọi
         var switching = false
         b.switchMonitoring.setOnCheckedChangeListener { _, on ->
             if (switching) return@setOnCheckedChangeListener
@@ -76,6 +82,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshStatus() {
         val hasUsage = DataUsageUtils.hasUsageAccessPermission(this)
+        val hasPhone = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
 
         b.tvUsageStatus.text = if (hasUsage)
             "✅ Đã cấp quyền Truy cập sử dụng"
@@ -87,31 +95,32 @@ class MainActivity : AppCompatActivity() {
         else
             "⚠️ Chưa bỏ qua tối ưu hóa pin (khuyến nghị)"
 
-        // Đọc data trên main thread chỉ khi có quyền và trong onResume
-        // (không gây ANR vì chỉ đọc 1 lần, không loop)
+        // Cập nhật trạng thái SIM permission
+        b.tvSimStatus.text = if (hasPhone)
+            "✅ Đã cấp quyền đọc thông tin SIM"
+        else
+            "⚠️ Chưa cấp quyền đọc SIM (cần cho máy 2 SIM)"
+
         if (hasUsage) {
             val used = DataUsageUtils.getMobileDataUsageBytes(
                 this, Prefs.startOfTodayMillis(), System.currentTimeMillis())
             b.tvCurrentUsage.text = when {
                 used < 0  -> "📶 Không đọc được dữ liệu"
+                used == 0L -> "📶 Data hôm nay: 0 B (bấm Debug nếu bất thường)"
                 else      -> "📶 Data di động hôm nay: ${DataUsageUtils.formatBytes(used)}"
             }
         } else {
             b.tvCurrentUsage.text = "📶 Chưa thể đọc (cần cấp quyền)"
         }
 
-        // Đồng bộ lại trạng thái switch với thực tế (tránh lệch khi service
-        // bị kill bởi hệ thống)
         b.switchMonitoring.isChecked = Prefs.isMonitoringEnabled(this)
     }
 
     private fun saveLimit() {
         val mb = b.etLimit.text?.toString()?.toLongOrNull()
         when {
-            mb == null || mb <= 0 ->
-                toast("Nhập hạn mức hợp lệ (số MB > 0)")
-            mb > 102_400 ->     // > 100 GB: có thể nhập nhầm
-                toast("Hạn mức tối đa là 102400 MB (100 GB)")
+            mb == null || mb <= 0 -> toast("Nhập hạn mức hợp lệ (số MB > 0)")
+            mb > 102_400          -> toast("Hạn mức tối đa 102400 MB (100 GB)")
             else -> {
                 Prefs.setDailyLimitMB(this, mb)
                 toast("Đã lưu: ${DataUsageUtils.formatBytes(mb * 1_048_576L)}/ngày")
@@ -123,9 +132,13 @@ class MainActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
-        ) {
-            notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
+        ) notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    private fun requestReadPhoneStateIfNeeded() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
+            != PackageManager.PERMISSION_GRANTED
+        ) readPhoneStateLauncher.launch(Manifest.permission.READ_PHONE_STATE)
     }
 
     private fun requestBatteryOptimization() {
@@ -139,12 +152,11 @@ class MainActivity : AppCompatActivity() {
                     data = Uri.parse("package:$packageName")
                 }
             )
-        } catch (e: Exception) {
-            // Một số ROM tùy biến không có màn hình này → mở trang pin tổng quát
+        } catch (_: Exception) {
             try {
                 startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
             } catch (_: Exception) {
-                toast("Vui lòng tắt tối ưu hóa pin cho app trong Cài đặt > Pin")
+                toast("Vào Cài đặt > Pin > tắt tối ưu cho app này")
             }
         }
     }
