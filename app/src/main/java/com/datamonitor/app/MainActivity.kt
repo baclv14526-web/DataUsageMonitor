@@ -52,6 +52,9 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
         }
         b.btnBattery.setOnClickListener { requestBatteryOptimization() }
+        b.btnHistory.setOnClickListener {
+            startActivity(Intent(this, HistoryActivity::class.java))
+        }
         b.btnDebug.setOnClickListener {
             startActivity(Intent(this, DebugActivity::class.java))
         }

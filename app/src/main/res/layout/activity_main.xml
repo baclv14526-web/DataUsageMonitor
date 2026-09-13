@@ -39,14 +39,31 @@
                 android:textColor="#1565C0"
                 android:textStyle="bold"/>
 
-            <Button
-                android:id="@+id/btnDebug"
-                android:layout_width="wrap_content"
-                android:layout_height="36dp"
-                android:text="🔍 Chạy Debug đo data"
-                android:textSize="12sp"
-                android:layout_marginTop="8dp"
-                android:backgroundTint="#546E7A"/>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp">
+
+                <Button
+                    android:id="@+id/btnHistory"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:text="📅 Lịch sử 30 ngày"
+                    android:textSize="12sp"
+                    android:layout_marginEnd="6dp"
+                    android:backgroundTint="#1565C0"/>
+
+                <Button
+                    android:id="@+id/btnDebug"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:text="🔍 Debug đo data"
+                    android:textSize="12sp"
+                    android:backgroundTint="#546E7A"/>
+            </LinearLayout>
         </LinearLayout>
 
         <!-- Card: bật/tắt + hạn mức -->
