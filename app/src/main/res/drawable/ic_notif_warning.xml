@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Icon cảnh báo 80%: sóng 5G + dấu chấm than
+    - Vẫn là sóng radio nhưng 2 trong 3 vạch (biểu hiện "sắp hết")
+    - Dấu chấm than góc phải dưới
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Chấm nguồn phát sóng -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M3.5,17.5 A1.5,1.5 0 1,1 3.5,14.5 A1.5,1.5 0 0,1 3.5,17.5 Z" />
+
+    <!-- Vạch sóng 1 (gần) -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:pathData="M6.5,15.5 Q8,13.5 6.5,11.5" />
+
+    <!-- Vạch sóng 2 (vừa) -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:pathData="M9,17 Q12,13.5 9,10" />
+
+    <!-- Vạch sóng 3 (xa - mờ/đứt để biểu hiện sắp hết) -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.0"
+        android:strokeLineCap="round"
+        android:pathData="M11.5,18.5 Q16,13.5 11.5,8.5" />
+
+    <!-- Dấu chấm than: thân -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M18.5,6.0 L19.5,6.0 L19.5,13.0 L18.5,13.0 Z" />
+
+    <!-- Dấu chấm than: chấm -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M18.5,14.5 A1.0,1.0 0 1,1 20.5,14.5 A1.0,1.0 0 0,1 18.5,14.5 Z" />
+
+</vector>

@@ -1,10 +1,59 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Launcher icon foreground: sóng 5G hiện đại
+    viewportWidth/Height = 108 (chuẩn adaptive icon foreground)
+    Safe zone: vẽ trong vùng trung tâm 72x72 (margin 18dp mỗi bên)
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- Chấm nguồn sóng - góc dưới bên trái của safe zone -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M54,24 C40,24 30,38 30,52 C30,66 40,80 54,86 C68,80 78,66 78,52 C78,38 68,24 54,24 Z M54,74 C45,70 38,60 38,52 C38,42 45,34 54,32 C63,34 70,42 70,52 C70,60 63,70 54,74 Z" />
+        android:pathData="M35,78 A5,5 0 1,1 35,68 A5,5 0 0,1 35,78 Z" />
+
+    <!-- Vạch sóng 1 - nhỏ, gần -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M44,75 Q50,63 44,51" />
+
+    <!-- Vạch sóng 2 - vừa -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M53,80 Q63,63 53,46" />
+
+    <!-- Vạch sóng 3 - lớn -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M62,85 Q76,63 62,41" />
+
+    <!-- Chữ 5 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="
+            M73,34 L83,34 L83,38 L73,38 L73,44
+            Q73,49 77,49 L83,49 L83,53 L76,53
+            Q69,53 69,45 L69,34 Z" />
+
+    <!-- Chữ G -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="
+            M95,37 Q92,32 87,32 Q81,32 81,42 Q81,53 87,53
+            Q91,53 93,50 L93,45 L89,45 L89,41 L97,41
+            L97,53 Q94,58 87,58 Q77,58 77,42
+            Q77,27 87,27 Q93,27 97,33 Z" />
+
 </vector>

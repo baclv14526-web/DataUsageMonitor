@@ -71,7 +71,7 @@ object NotificationHelper {
         )
 
         return NotificationCompat.Builder(ctx, CH_ONGOING)
-            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setSmallIcon(R.drawable.ic_notif_signal)
             .setContentTitle(title)
             .setContentText(text)
             .setOngoing(true)
@@ -91,7 +91,7 @@ object NotificationHelper {
         )
         nm(ctx).notify(ID_WARNING,
             NotificationCompat.Builder(ctx, CH_WARNING)
-                .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .setSmallIcon(R.drawable.ic_notif_warning)
                 .setContentTitle("⚠️ Sắp hết hạn mức data ($pct%)")
                 .setContentText(
                     "Đã dùng ${DataUsageUtils.formatBytes(usedBytes)} / $limitMB MB hôm nay")
@@ -119,7 +119,7 @@ object NotificationHelper {
         )
         nm(ctx).notify(ID_CRITICAL,
             NotificationCompat.Builder(ctx, CH_CRITICAL)
-                .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .setSmallIcon(R.drawable.ic_notif_critical)
                 .setContentTitle("🚫 Đã vượt hạn mức data hôm nay!")
                 .setContentText(
                     "Đã dùng ${DataUsageUtils.formatBytes(usedBytes)} / $limitMB MB")
