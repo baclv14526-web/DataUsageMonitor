@@ -15,6 +15,8 @@ import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -29,7 +31,7 @@ class DebugActivity : AppCompatActivity() {
 
     private lateinit var tvLog: TextView
     private val log = StringBuilder()
-    private val scope = CoroutineScope(Dispatchers.Main)
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -299,5 +301,12 @@ class DebugActivity : AppCompatActivity() {
         } catch (e: Exception) {
             err("$label → EXCEPTION: ${e.message}")
         }
+    }
+
+    override fun onDestroy() {
+        // Hủy coroutine đang chạy nếu người dùng đóng màn hình giữa chừng
+        // (tránh leak khi activity bị destroy trong lúc query I/O đang chạy)
+        scope.cancel()
+        super.onDestroy()
     }
 }

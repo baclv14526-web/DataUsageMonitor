@@ -1,14 +1,6 @@
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        classpath("com.android.tools.build:gradle:8.3.2")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.23")
-    }
-}
-
+// Plugin versions được quản lý trong settings.gradle.kts
+// Root build file chỉ cần task clean
 tasks.register("clean", Delete::class) {
-    delete(rootProject.buildDir)
+    // Dùng layout.buildDirectory thay cho buildDir (deprecated từ Gradle 8.x)
+    delete(layout.buildDirectory)
 }

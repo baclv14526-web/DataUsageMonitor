@@ -1,116 +1,197 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="#F0F4F8">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="20dp">
+        android:padding="16dp">
 
+        <!-- Tiêu đề -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/app_name"
-            android:textSize="22sp"
+            android:text="📶 Giám Sát Data 3G/4G/5G"
+            android:textSize="20sp"
             android:textStyle="bold"
-            android:layout_marginBottom="16dp" />
+            android:textColor="#1565C0"
+            android:layout_marginBottom="12dp"/>
 
-        <TextView
-            android:id="@+id/tvCurrentUsage"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Data 3G/4G/5G đã dùng hôm nay: --"
-            android:textSize="18sp"
-            android:textColor="@color/primary"
-            android:layout_marginBottom="20dp" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Hạn mức data hàng ngày (MB):"
-            android:textSize="15sp" />
-
-        <EditText
-            android:id="@+id/etLimit"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="number"
-            android:hint="Ví dụ: 1024"
-            android:layout_marginTop="4dp" />
-
-        <Button
-            android:id="@+id/btnSave"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Lưu hạn mức"
-            android:layout_marginTop="8dp" />
-
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="#DDDDDD"
-            android:layout_marginVertical="20dp" />
-
+        <!-- Card: data hôm nay -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="12dp">
+            android:orientation="vertical"
+            android:background="#FFFFFF"
+            android:padding="16dp"
+            android:elevation="2dp"
+            android:layout_marginBottom="10dp">
 
             <TextView
-                android:layout_width="0dp"
+                android:id="@+id/tvCurrentUsage"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Bật giám sát nền"
-                android:textSize="16sp" />
+                android:text="📶 Đang tải..."
+                android:textSize="17sp"
+                android:textColor="#1565C0"
+                android:textStyle="bold"/>
 
-            <Switch
-                android:id="@+id/switchMonitoring"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp">
+
+                <Button
+                    android:id="@+id/btnHistory"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:text="📅 Lịch sử 30 ngày"
+                    android:textSize="12sp"
+                    android:layout_marginEnd="6dp"
+                    android:backgroundTint="#1565C0"/>
+
+                <Button
+                    android:id="@+id/btnDebug"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:text="🔍 Debug đo data"
+                    android:textSize="12sp"
+                    android:backgroundTint="#546E7A"/>
+            </LinearLayout>
         </LinearLayout>
 
+        <!-- Card: bật/tắt + hạn mức -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#FFFFFF"
+            android:padding="16dp"
+            android:elevation="2dp"
+            android:layout_marginBottom="10dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="14dp">
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Bật giám sát nền"
+                    android:textSize="16sp"
+                    android:textStyle="bold"/>
+                <Switch
+                    android:id="@+id/switchMonitoring"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Hạn mức data hàng ngày (MB):"
+                android:textSize="14sp"
+                android:textColor="#555"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText
+                android:id="@+id/etLimit"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:hint="Ví dụ: 1024 (= 1 GB)"
+                android:textSize="16sp"
+                android:layout_marginBottom="10dp"/>
+
+            <Button
+                android:id="@+id/btnSave"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="Lưu hạn mức"
+                android:backgroundTint="#1976D2"/>
+        </LinearLayout>
+
+        <!-- Card: quyền -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#FFFFFF"
+            android:padding="16dp"
+            android:elevation="2dp"
+            android:layout_marginBottom="10dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Quyền truy cập"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="10dp"/>
+
+            <TextView
+                android:id="@+id/tvUsageStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:layout_marginBottom="4dp"/>
+
+            <Button
+                android:id="@+id/btnUsageAccess"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:text="Cấp quyền Truy cập sử dụng"
+                android:backgroundTint="#2E7D32"
+                android:layout_marginBottom="12dp"/>
+
+            <TextView
+                android:id="@+id/tvSimStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:layout_marginBottom="4dp"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="(Quyền đọc SIM cần thiết để đo đúng trên máy 2 SIM)"
+                android:textSize="11sp"
+                android:textColor="#777"
+                android:layout_marginBottom="12dp"/>
+
+            <TextView
+                android:id="@+id/tvBatteryStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:layout_marginBottom="4dp"/>
+
+            <Button
+                android:id="@+id/btnBattery"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:text="Bỏ qua tối ưu hóa pin"
+                android:backgroundTint="#E65100"/>
+        </LinearLayout>
+
+        <!-- Ghi chú Samsung/Oppo/Realme -->
         <TextView
-            android:id="@+id/tvUsageAccessStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Trạng thái quyền Truy cập sử dụng"
-            android:textSize="14sp"
-            android:layout_marginTop="8dp" />
-
-        <Button
-            android:id="@+id/btnUsageAccess"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Cấp quyền Truy cập sử dụng"
-            android:layout_marginTop="4dp" />
-
-        <TextView
-            android:id="@+id/tvBatteryStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Trạng thái tối ưu hóa pin"
-            android:textSize="14sp"
-            android:layout_marginTop="16dp" />
-
-        <Button
-            android:id="@+id/btnBatteryOptimization"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Bỏ qua tối ưu hóa pin"
-            android:layout_marginTop="4dp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Lưu ý: Trên Samsung/Oppo/Realme, vào Cài đặt pin của ứng dụng và chọn 'Không giới hạn' / tắt 'Ngủ đông ứng dụng' để giám sát chạy ổn định khi khóa máy lâu."
+            android:text="💡 Trên Samsung: Cài đặt > Ứng dụng > chọn app > Pin > chọn \'Không giới hạn\'\nTrên Oppo/Realme: Cài đặt > Pin > bật Tự khởi động cho app này"
             android:textSize="12sp"
-            android:textColor="#757575"
-            android:layout_marginTop="20dp" />
+            android:textColor="#666"
+            android:lineSpacingExtra="4dp"
+            android:layout_marginTop="4dp"/>
 
     </LinearLayout>
 </ScrollView>

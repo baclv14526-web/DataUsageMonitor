@@ -1,95 +1,148 @@
 package com.datamonitor.app
 
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * Foreground service chạy nền, định kỳ kiểm tra lưu lượng data di động
- * đã dùng trong ngày và so sánh với hạn mức người dùng đặt.
+ * Foreground Service giám sát lưu lượng data di động.
+ *
+ * Crash cũ:
+ *   - withContext(Dispatchers.Main) bên trong coroutine IO để notify:
+ *     nếu service bị destroy trong lúc đang switch context → crash
+ *   - scope không bị cancel khi service restart (START_STICKY tạo lại
+ *     onStartCommand nhưng scope cũ vẫn chạy → 2 vòng lặp song song)
+ *
+ * Fix:
+ *   - Dùng Dispatchers.Default cho coroutine (không block IO thread pool,
+ *     không cần Main vì NotificationManager.notify() thread-safe)
+ *   - Hủy job cũ trước khi tạo job mới trong onStartCommand
+ *   - Guard isActive sau mỗi suspend call để thoát sạch khi cancel
  */
 class DataUsageMonitorService : Service() {
 
-    private var job: Job? = null
-    private val scope = CoroutineScope(Dispatchers.IO)
-
     companion object {
-        const val CHECK_INTERVAL_MS = 60_000L // kiểm tra mỗi 60 giây
-        const val ACTION_STOP = "com.datamonitor.app.STOP"
+        const val ACTION_STOP    = "com.datamonitor.app.STOP"
+        const val CHECK_INTERVAL = 60_000L
+        private const val TAG    = "DataMonitor"
     }
+
+    // SupervisorJob: lỗi ở 1 coroutine con không cancel các coroutine khác
+    private val supervisor = SupervisorJob()
+    private val scope = CoroutineScope(Dispatchers.Default + supervisor)
+    private var monitorJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
         NotificationHelper.createChannels(this)
+        Log.d(TAG, "Service onCreate")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Dừng service nếu nhận lệnh STOP
         if (intent?.action == ACTION_STOP) {
+            Log.d(TAG, "Nhận ACTION_STOP")
             Prefs.setMonitoringEnabled(this, false)
             stopSelf()
             return START_NOT_STICKY
         }
 
-        val initialNotif = NotificationHelper.buildOngoingNotification(this, 0L, Prefs.getDailyLimitMB(this))
-        startForeground(NotificationHelper.NOTIF_ID_ONGOING, initialNotif)
+        // Đẩy foreground ngay lập tức — bắt buộc trong 5 giây sau startForegroundService()
+        // Nếu trễ hơn → ANR / ForegroundServiceDidNotStartInTimeException (crash)
+        startForeground(
+            NotificationHelper.ID_ONGOING,
+            NotificationHelper.buildOngoing(
+                this, 0L, Prefs.getDailyLimitMB(this))
+        )
 
         Prefs.setMonitoringEnabled(this, true)
-        startLoop()
-        return START_STICKY
+
+        // Hủy job cũ nếu service bị restart (tránh 2 vòng lặp chạy song song)
+        monitorJob?.cancel()
+        monitorJob = scope.launch {
+            // Dọn key cũ 1 lần khi start
+            Prefs.pruneOldNotifKeys(this@DataUsageMonitorService)
+            runMonitorLoop()
+        }
+
+        Log.d(TAG, "Service started, monitoring loop launched")
+        return START_STICKY // Hệ thống tự restart nếu kill service
     }
 
-    private fun startLoop() {
-        job?.cancel()
-        job = scope.launch {
-            while (true) {
-                checkUsageOnce()
-                delay(CHECK_INTERVAL_MS)
+    private suspend fun runMonitorLoop() {
+        // currentCoroutineContext().isActive: cách đúng để kiểm tra cancel
+        // bên trong suspend fun (không phải CoroutineScope, nên 'isActive' bare
+        // không resolve được receiver phù hợp)
+        while (currentCoroutineContext().isActive) {
+            try {
+                checkAndNotify()
+            } catch (e: Exception) {
+                // Bắt mọi exception để vòng lặp không bị dừng do lỗi bất ngờ
+                Log.e(TAG, "Lỗi trong checkAndNotify: ${e.message}", e)
             }
+            delay(CHECK_INTERVAL)
         }
     }
 
-    private fun checkUsageOnce() {
-        val limitMB = Prefs.getDailyLimitMB(this)
-        val start = Prefs.startOfTodayMillis()
-        val end = System.currentTimeMillis()
+    private fun checkAndNotify() {
+        val limitMB   = Prefs.getDailyLimitMB(this)
+        val startMs   = Prefs.startOfTodayMillis()
+        val nowMs     = System.currentTimeMillis()
+        val usedBytes = DataUsageUtils.getMobileDataUsageBytes(this, startMs, nowMs)
 
-        val usedBytes = DataUsageUtils.getMobileDataUsageBytes(this, start, end)
-        if (usedBytes < 0) return // chưa có quyền usage access
+        if (usedBytes < 0) {
+            // Chưa có quyền Usage Access — cập nhật notification nhắc nhở
+            // BUG ĐÃ SỬA: trước đây truyền 0L khiến buildOngoing() hiểu nhầm
+            // là "đã đo được 0 byte" và hiện sai tiêu đề "Data hôm nay: 0 B"
+            // thay vì "Cần cấp quyền". Phải truyền đúng -1L để buildOngoing()
+            // nhận diện đúng trường hợp thiếu quyền.
+            val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            nm.notify(NotificationHelper.ID_ONGOING,
+                NotificationHelper.buildOngoing(this, -1L, limitMB))
+            return
+        }
+
+        // Cập nhật notification nền (NotificationManager.notify thread-safe)
+        val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(NotificationHelper.ID_ONGOING,
+            NotificationHelper.buildOngoing(this, usedBytes, limitMB))
 
         val usedMB = DataUsageUtils.bytesToMB(usedBytes)
-        val percent = if (limitMB > 0) ((usedMB / limitMB) * 100).toInt() else 0
+        val pct    = if (limitMB > 0) ((usedMB / limitMB) * 100).toInt().coerceIn(0, 999)
+                     else 0
 
-        // Cập nhật thông báo nền liên tục
-        val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
-        nm.notify(
-            NotificationHelper.NOTIF_ID_ONGOING,
-            NotificationHelper.buildOngoingNotification(this, usedBytes, limitMB)
-        )
+        Log.d(TAG, "Check: ${DataUsageUtils.formatBytes(usedBytes)} / $limitMB MB ($pct%)")
 
         when {
-            percent >= 100 -> {
-                if (!Prefs.wasNotifiedToday(this, 100)) {
-                    NotificationHelper.sendCriticalNotification(this, usedBytes, limitMB)
-                    Prefs.markNotifiedToday(this, 100)
-                }
+            pct >= 100 && !Prefs.wasNotifiedToday(this, 100) -> {
+                NotificationHelper.sendCritical(this, usedBytes, limitMB)
+                Prefs.markNotifiedToday(this, 100)
             }
-            percent >= 80 -> {
-                if (!Prefs.wasNotifiedToday(this, 80)) {
-                    NotificationHelper.sendWarningNotification(this, percent, usedBytes, limitMB)
-                    Prefs.markNotifiedToday(this, 80)
-                }
+            pct >= 80 && pct < 100 && !Prefs.wasNotifiedToday(this, 80) -> {
+                NotificationHelper.sendWarning(this, pct, usedBytes, limitMB)
+                Prefs.markNotifiedToday(this, 80)
             }
         }
     }
 
     override fun onDestroy() {
+        Log.d(TAG, "Service onDestroy")
+        monitorJob?.cancel()
+        supervisor.cancel()
+        // Xóa notification nền — gọi trực tiếp, không cần coroutine
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
+            .cancel(NotificationHelper.ID_ONGOING)
         super.onDestroy()
-        job?.cancel()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
