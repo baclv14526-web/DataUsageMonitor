@@ -54,8 +54,13 @@ jobs:
           fi
 
           echo "✅ Tìm thấy sdkmanager: $SDKMANAGER"
-          chmod +x "$SDKMANAGER"
-          "$SDKMANAGER" --version
+
+          # KHÔNG chmod +x — thư mục SDK cài sẵn trên runner thuộc quyền
+          # root, user "runner" chạy job không có quyền đổi permission
+          # (chmod: Operation not permitted). Không cần thiết: sdkmanager
+          # là shell script, gọi qua "bash <file>" chỉ cần quyền ĐỌC,
+          # không cần quyền THỰC THI trên chính file đó.
+          bash "$SDKMANAGER" --version
 
           # Thêm thư mục chứa sdkmanager vào PATH cho các step SAU trong job
           # này (bao gồm cả platform-tools chứa adb nếu cần dùng sau)
@@ -64,8 +69,8 @@ jobs:
 
           # Cài đúng platform/build-tools cần dùng (idempotent — bỏ qua
           # nếu đã có sẵn trong runner image)
-          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
-          "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          yes | bash "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          bash "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       # ---------------------------------------------------------------
       # 3. Gradle Wrapper
