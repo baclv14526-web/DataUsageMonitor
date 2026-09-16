@@ -39,11 +39,33 @@ jobs:
       - name: Verify pre-installed Android SDK
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
-          sdkmanager --version
-          # Cài thêm đúng platform/build-tools cần dùng nếu runner image
-          # chưa có sẵn (idempotent — bỏ qua nếu đã tồn tại)
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+          # sdkmanager không nằm sẵn trong PATH của step này (mỗi step chạy
+          # shell mới, PATH không tự kế thừa giữa các step trừ khi ghi vào
+          # $GITHUB_PATH). Tự dò đường dẫn thật của sdkmanager trong SDK
+          # có sẵn — thường nằm dưới cmdline-tools/<version>/bin/.
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name "sdkmanager" -type f 2>/dev/null | sort -V | tail -1)
+
+          if [ -z "$SDKMANAGER" ]; then
+            echo "❌ Không tìm thấy sdkmanager trong $ANDROID_HOME/cmdline-tools"
+            echo "Nội dung thư mục cmdline-tools:"
+            find "$ANDROID_HOME/cmdline-tools" -maxdepth 2
+            exit 1
+          fi
+
+          echo "✅ Tìm thấy sdkmanager: $SDKMANAGER"
+          chmod +x "$SDKMANAGER"
+          "$SDKMANAGER" --version
+
+          # Thêm thư mục chứa sdkmanager vào PATH cho các step SAU trong job
+          # này (bao gồm cả platform-tools chứa adb nếu cần dùng sau)
+          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+
+          # Cài đúng platform/build-tools cần dùng (idempotent — bỏ qua
+          # nếu đã có sẵn trong runner image)
+          yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       # ---------------------------------------------------------------
       # 3. Gradle Wrapper
