@@ -60,13 +60,39 @@ object Prefs {
 
     // ── Thời gian đầu ngày ───────────────────────────────────────
     // Cache trong 60 giây — đủ cho 1 chu kỳ check, tránh tính lại Calendar
+    //
+    // BUG ĐÃ SỬA: cache cũ chỉ kiểm tra "đã qua 60 giây chưa" mà KHÔNG
+    // kiểm tra có sang ngày mới hay không. Kịch bản lỗi thực tế:
+    //   - 23:59:50 → tính & cache "00:00 hôm nay" (tức 23:59:50 của
+    //     ngày cũ tính theo mốc UTC/local)
+    //   - 00:00:10 (chỉ mới 20 giây trôi qua, còn trong cửa sổ cache
+    //     60 giây) → hàm trả về NHẦM mốc "00:00 hôm qua" thay vì
+    //     "00:00 hôm nay"
+    //   - Hậu quả: usedBytes được tính từ mốc SAI (dư ra gần 24 giờ dữ
+    //     liệu của ngày hôm qua), có thể khiến app tưởng đã vượt hạn
+    //     mức ngay đầu ngày mới và gửi cảnh báo giả
+    //   - NGHIÊM TRỌNG HƠN: Prefs.markNotifiedToday(ctx, 100) sẽ đánh
+    //     dấu "đã cảnh báo 100% hôm nay" dựa trên ngày THẬT (todayTag()
+    //     không bị cache, luôn đúng) → cảnh báo giả này "dùng mất" lượt
+    //     cảnh báo hợp lệ của cả ngày, khiến cảnh báo THẬT sau đó trong
+    //     ngày (khi thực sự vượt hạn mức) KHÔNG BAO GIỜ được gửi nữa.
+    //
+    // FIX: lưu kèm "nhãn ngày" (cùng định dạng với todayTag()) tại thời
+    // điểm cache. Chỉ dùng lại cache nếu vẫn cùng ngày — bất kể mốc thời
+    // gian có nằm trong 60 giây hay không.
     @Volatile private var cachedTodayStart = 0L
     @Volatile private var cachedAt = 0L
+    @Volatile private var cachedDayTag: String? = null
 
     fun startOfTodayMillis(): Long {
         val now = System.currentTimeMillis()
-        if (now - cachedAt < 60_000L && cachedTodayStart > 0L)
-            return cachedTodayStart
+        val currentDayTag = todayTag()
+
+        if (now - cachedAt < 60_000L &&
+            cachedTodayStart > 0L &&
+            cachedDayTag == currentDayTag
+        ) return cachedTodayStart
+
         val start = Calendar.getInstance().run {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -76,6 +102,7 @@ object Prefs {
         }
         cachedTodayStart = start
         cachedAt = now
+        cachedDayTag = currentDayTag
         return start
     }
 

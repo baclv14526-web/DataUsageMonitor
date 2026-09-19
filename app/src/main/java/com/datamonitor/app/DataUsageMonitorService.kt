@@ -24,10 +24,24 @@ import kotlinx.coroutines.launch
  *     onStartCommand nhưng scope cũ vẫn chạy → 2 vòng lặp song song)
  *
  * Fix:
- *   - Dùng Dispatchers.Default cho coroutine (không block IO thread pool,
- *     không cần Main vì NotificationManager.notify() thread-safe)
  *   - Hủy job cũ trước khi tạo job mới trong onStartCommand
  *   - Guard isActive sau mỗi suspend call để thoát sạch khi cancel
+ *
+ * BUG ĐÃ SỬA (lần review này) — sai loại Dispatcher:
+ *   Code cũ dùng Dispatchers.Default cho vòng lặp giám sát. Nhưng
+ *   Dispatchers.Default chỉ có số luồng CỐ ĐỊNH bằng số nhân CPU
+ *   (thường 2-4 trên điện thoại), dành riêng cho tác vụ TÍNH TOÁN
+ *   thuần túy (CPU-bound). checkAndNotify() bên trong lại gọi
+ *   NetworkStatsManager.querySummary() — đây là lời gọi hệ thống
+ *   CHẶN LUỒNG THẬT SỰ (blocking I/O/IPC), có thể mất vài chục đến
+ *   vài trăm mili-giây, đặc biệt khi DataUsageUtils phải dò lại toàn
+ *   bộ 6 chiến lược (SIM bị rút, cache bị invalidate...).
+ *   Chiếm giữ 1 trong số ít luồng Default suốt thời gian đó có thể
+ *   làm nghẽn các coroutine CPU-bound khác trong toàn bộ ứng dụng
+ *   (kể cả coroutine của Activity khác nếu vô tình dùng chung pool
+ *   mặc định). Dispatchers.IO tồn tại chính xác để giải quyết việc
+ *   này — nó có pool lớn hơn nhiều (mặc định tới 64 luồng), được
+ *   thiết kế riêng cho các lời gọi có thể chặn luồng dài hạn.
  */
 class DataUsageMonitorService : Service() {
 
@@ -38,8 +52,9 @@ class DataUsageMonitorService : Service() {
     }
 
     // SupervisorJob: lỗi ở 1 coroutine con không cancel các coroutine khác
+    // Dispatchers.IO: đúng cho tác vụ có thể chặn luồng (NetworkStatsManager)
     private val supervisor = SupervisorJob()
-    private val scope = CoroutineScope(Dispatchers.Default + supervisor)
+    private val scope = CoroutineScope(Dispatchers.IO + supervisor)
     private var monitorJob: Job? = null
 
     override fun onCreate() {

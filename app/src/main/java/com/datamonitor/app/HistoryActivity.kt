@@ -98,16 +98,37 @@ class HistoryActivity : AppCompatActivity() {
     }
 
     private fun buildHistoryItems(): List<DayUsage> {
+        // BUG ĐÃ SỬA: code cũ gọi .coerceAtLeast(0L) lên kết quả của
+        // getMobileDataUsageBytes() — hàm này trả về -1L khi THIẾU
+        // QUYỀN Usage Access. coerceAtLeast(0L) biến -1 thành 0, khiến
+        // app hiểu nhầm "thiếu quyền" thành "dùng 0 byte hợp lệ".
+        //
+        // Hậu quả: vòng lặp 30 ngày luôn trả về đủ 30 item (dù thiếu
+        // quyền hay không), nên điều kiện `if (items.isEmpty())` ở
+        // loadHistory() — vốn được viết để hiện thông báo "cần cấp
+        // quyền" — KHÔNG BAO GIỜ đúng. Người dùng thiếu quyền sẽ thấy
+        // toàn bộ 30 ngày là "0 B / Bình thường" thay vì thông báo lỗi
+        // rõ ràng, dễ hiểu nhầm là app đang hoạt động tốt.
+        //
+        // FIX: kiểm tra quyền MỘT LẦN trước vòng lặp, trả về danh sách
+        // rỗng ngay nếu thiếu quyền — đúng như logic loadHistory() đã
+        // được thiết kế để xử lý.
+        if (!DataUsageUtils.hasUsageAccessPermission(this)) {
+            return emptyList()
+        }
+
         val limitMB = Prefs.getDailyLimitMB(this)
         val result  = mutableListOf<DayUsage>()
         val cal     = Calendar.getInstance()
+        // Tạo 1 lần, tái sử dụng cho cả 30 ngày thay vì tạo mới mỗi vòng lặp
+        val dateFormat = SimpleDateFormat("dd/MM/yyyy (EEE)", Locale("vi"))
 
         // Ngày hôm nay đứng đầu (index 0), đi ngược về 29 ngày trước
         for (i in 0 until 30) {
             val dayLabel = when (i) {
                 0    -> "Hôm nay"
                 1    -> "Hôm qua"
-                else -> SimpleDateFormat("dd/MM/yyyy (EEE)", Locale("vi")).format(cal.time)
+                else -> dateFormat.format(cal.time)
             }
 
             // Tính startMs = 00:00:00 của ngày cal
@@ -123,8 +144,12 @@ class HistoryActivity : AppCompatActivity() {
             val endMs = if (i == 0) System.currentTimeMillis()
                         else startMs + 86_399_999L
 
+            // Đã kiểm tra quyền ở trên nên không cần coerceAtLeast(0L)
+            // che lỗi nữa — nếu có lỗi bất thường giữa chừng (hiếm gặp,
+            // ví dụ quyền bị thu hồi ngay lúc đang load), vẫn hiển thị
+            // 0 cho riêng ngày đó thay vì làm hỏng cả danh sách.
             val bytes = DataUsageUtils.getMobileDataUsageBytes(this, startMs, endMs)
-                .coerceAtLeast(0L)
+                .let { if (it < 0) 0L else it }
 
             result.add(DayUsage(
                 label   = dayLabel,
